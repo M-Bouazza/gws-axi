@@ -93,7 +93,9 @@ export async function contactsSearchCommand(account: string, args: string[]): Pr
       const res = await api.otherContacts.search({
         query: flags.query,
         pageSize: flags.limit,
-        readMask: "names,emailAddresses,phoneNumbers,organizations",
+        // organizations is NOT allowed on otherContacts read requests (400) —
+        // Other Contacts rarely carry org data anyway; entreprise stays "".
+        readMask: "names,emailAddresses,phoneNumbers",
       });
       for (const result of res.data.results ?? []) {
         const person = result.person;

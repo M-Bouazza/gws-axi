@@ -2,6 +2,7 @@ import { AxiError } from "axi-sdk-js";
 import { resolveAccount, withAccountSource } from "../google/account.js";
 import { notImplemented, renderAlternatives, withInstead } from "./stub-signposts.js";
 import { CONTACTS_ADD_HELP, contactsAddCommand } from "./contacts/add.js";
+import { CONTACTS_ENRICH_HELP, contactsEnrichCommand } from "./contacts/enrich.js";
 import {
   CONTACTS_LIST_HELP,
   contactsListCommand,
@@ -31,6 +32,7 @@ const SUBCOMMANDS: ContactsSubcommand[] = [
   { name: "other", mutation: false, help: CONTACTS_OTHER_HELP, handler: contactsOtherCommand },
   { name: "search", mutation: false, help: CONTACTS_SEARCH_HELP, handler: contactsSearchCommand },
   { name: "scan-signatures", mutation: false, help: CONTACTS_SCAN_HELP, handler: contactsScanCommand },
+  { name: "enrich", mutation: true, help: CONTACTS_ENRICH_HELP, handler: contactsEnrichCommand },
   { name: "add", mutation: true, help: CONTACTS_ADD_HELP, handler: contactsAddCommand },
   { name: "update", mutation: true, help: CONTACTS_UPDATE_HELP, handler: contactsUpdateCommand },
   { name: "delete", mutation: true, help: DELETE_HELP },
@@ -69,7 +71,7 @@ writes[${writes.length}]:
 notes:
   Writes require --account <email> when 2+ accounts are authenticated.
   Reads use the default account when --account is not provided.
-  'list'/'other'/'search'/'scan-signatures' and 'add'/'update' are
+  'list'/'other'/'search'/'scan-signatures'/'enrich' and 'add'/'update' are
   implemented; delete is scaffolded (destructive — use the Contacts UI).
   Other Contacts = people interacted with via Gmail/Drive but never saved.
 ${renderAlternatives(SUBCOMMANDS)}subcommand help:
@@ -77,6 +79,7 @@ ${renderAlternatives(SUBCOMMANDS)}subcommand help:
   gws-axi contacts other --help  for interacted-with people (no Gmail scan needed)
   gws-axi contacts search --help for name/email/phone lookup
   gws-axi contacts scan-signatures --help  for FR phone proposals from Gmail bodies
+  gws-axi contacts enrich --help for systematic phone + company enrichment
   gws-axi contacts add --help    for creating / promoting / enriching
   gws-axi contacts update --help for merged in-place edits
 examples:
@@ -84,6 +87,7 @@ examples:
   gws-axi contacts other
   gws-axi contacts search Djuce --include-other
   gws-axi contacts scan-signatures --query "from:david@djuce.com"
+  gws-axi contacts enrich --apply --limit 100
   gws-axi contacts add --name "David Dworsky" --company Djuce --email david@djuce.com --phone "06 12 34 56 78"
   gws-axi contacts update people/c456 --phone "06 12 34 56 78" --company Djuce
 `;
