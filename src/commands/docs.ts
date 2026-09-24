@@ -6,6 +6,7 @@ import { docsDiffCommand, DIFF_HELP } from "./docs/diff.js";
 import { docsDownloadCommand, DOWNLOAD_HELP } from "./docs/download.js";
 import { docsFindCommand, FIND_HELP } from "./docs/find.js";
 import { docsReadCommand, READ_HELP } from "./docs/read.js";
+import { docsUpdateCommand, UPDATE_HELP } from "./docs/update.js";
 import { driveRevisionsCommand, REVISIONS_HELP } from "./drive/revisions.js";
 
 interface DocsSubcommand {
@@ -26,8 +27,8 @@ const ROUND_TRIP = [
   "Multi-tab Docs are refused with MULTI_TAB_TARGET unless --replace-all-tabs; `gws-axi docs diff <documentId> <revA>` compares revisions afterward",
 ];
 
-// Write subcommands are still stubs but we keep per-command --help text
-// so agents can plan around the future surface.
+// Write subcommands other than `update` are still stubs but we keep
+// per-command --help text so agents can plan around the future surface.
 const APPEND_HELP = `usage: gws-axi docs append <documentId> --text <markdown> [--tab <id>] [flags]
 status: planned for v1 writes — not yet implemented
 notes:
@@ -74,6 +75,7 @@ const SUBCOMMANDS: DocsSubcommand[] = [
   // model, but the implementation is Drive-wide (any file type).
   { name: "revisions", mutation: false, help: REVISIONS_HELP, handler: driveRevisionsCommand },
   { name: "diff", mutation: false, help: DIFF_HELP, handler: docsDiffCommand },
+  { name: "update", mutation: true, help: UPDATE_HELP, handler: docsUpdateCommand },
   { name: "append", mutation: true, help: APPEND_HELP, instead: ROUND_TRIP },
   { name: "insert-text", mutation: true, help: INSERT_TEXT_HELP, instead: ROUND_TRIP },
   { name: "delete-range", mutation: true, help: DELETE_RANGE_HELP, instead: ROUND_TRIP },
@@ -121,7 +123,8 @@ writes[${writes.length}]:
 notes:
   Writes require --account <email> when 2+ accounts are authenticated.
   Reads use the default account when --account is not provided.
-  Write subcommands are scaffolded for the next slice — all currently
+  'update' is implemented (documents.batchUpdate replaceAllText); the other
+  write subcommands are scaffolded for the next slice — they currently
   throw NOT_IMPLEMENTED after account resolution runs.
 ${renderAlternatives(SUBCOMMANDS)}subcommand help:
   gws-axi docs read --help        for documentId + tab handling
@@ -129,6 +132,7 @@ ${renderAlternatives(SUBCOMMANDS)}subcommand help:
   gws-axi docs comments --help    for review comments + replies
   gws-axi docs download --help    for native-file export / raw download
   gws-axi docs diff --help        for comparing two revisions
+  gws-axi docs update --help      for in-place find/replace edits
 examples:
   gws-axi docs read 1BxAbc...
   gws-axi docs read 1BxAbc... --tab t.0 --full
@@ -136,6 +140,8 @@ examples:
   gws-axi docs comments 1BxAbc...
   gws-axi docs download 1BxAbc... --out ./spec.docx
   gws-axi docs diff 1BxAbc... 841 865
+  gws-axi docs update 1BxAbc... --find "2025" --replace "2026"
+  gws-axi docs update 1BxAbc... --find '{{Client}}' --replace "Cospirit"
 `;
 
 export async function docsCommand(args: string[]): Promise<string> {

@@ -7,6 +7,7 @@ export const SERVICE_SCOPES = {
   drive: "https://www.googleapis.com/auth/drive",
   slides: "https://www.googleapis.com/auth/presentations",
   sheets: "https://www.googleapis.com/auth/spreadsheets",
+  forms: "https://www.googleapis.com/auth/forms",
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_SCOPES;
@@ -44,7 +45,15 @@ export const ADDITIONAL_SCOPE_INFO: AdditionalScope[] = [
 
 export const ADDITIONAL_SCOPES = ADDITIONAL_SCOPE_INFO.map((s) => s.scope);
 
-export const SERVICES: ServiceName[] = ["gmail", "calendar", "docs", "drive", "slides", "sheets"];
+export const SERVICES: ServiceName[] = [
+  "gmail",
+  "calendar",
+  "docs",
+  "drive",
+  "slides",
+  "sheets",
+  "forms",
+];
 
 export const REQUIRED_APIS: Record<ServiceName, string> = {
   gmail: "gmail.googleapis.com",
@@ -53,6 +62,7 @@ export const REQUIRED_APIS: Record<ServiceName, string> = {
   drive: "drive.googleapis.com",
   slides: "slides.googleapis.com",
   sheets: "sheets.googleapis.com",
+  forms: "forms.googleapis.com",
 };
 
 // APIs required beyond the per-service REQUIRED_APIS map. The Drive Activity

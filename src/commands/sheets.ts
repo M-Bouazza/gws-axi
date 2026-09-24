@@ -2,6 +2,7 @@ import { AxiError } from "axi-sdk-js";
 import { resolveAccount, withAccountSource } from "../google/account.js";
 import { docsCommentsCommand } from "./docs/comments.js";
 import { READ_HELP, sheetsReadCommand } from "./sheets/read.js";
+import { UPDATE_HELP, sheetsUpdateCommand } from "./sheets/update.js";
 import { notImplemented, renderAlternatives, withInstead } from "./stub-signposts.js";
 
 // Google Sheets comments are Drive comments — the exact same file-agnostic API
@@ -44,15 +45,9 @@ const CREATE_VIA_UPLOAD = [
   'gws-axi drive upload <file.csv> --convert --name "<title>" --account <email> — creates a new native Spreadsheet and returns its id',
 ];
 
-// Write subcommands are stubs for the next slice — kept with per-command --help
-// so agents can plan around the future surface. They throw NOT_IMPLEMENTED after
-// account resolution runs.
-const UPDATE_HELP = `usage: gws-axi sheets update <spreadsheetId> --tab <name> --range <A1> --values <json|csv> [flags]
-status: planned for writes — not yet implemented
-notes:
-  Will wrap spreadsheets.values.update. Requires --account <email> when 2+
-  accounts are authenticated.
-`;
+// Write subcommands other than `update` are stubs for the next slice — kept
+// with per-command --help so agents can plan around the future surface. They
+// throw NOT_IMPLEMENTED after account resolution runs.
 const APPEND_HELP = `usage: gws-axi sheets append <spreadsheetId> --tab <name> --values <json|csv> [flags]
 status: planned for writes — not yet implemented
 notes:
@@ -82,7 +77,7 @@ const sheetsCommentsCommand = (account: string, args: string[]): Promise<string>
 const SUBCOMMANDS: SheetsSubcommand[] = [
   { name: "read", mutation: false, help: READ_HELP, handler: sheetsReadCommand },
   { name: "comments", mutation: false, help: COMMENTS_HELP, handler: sheetsCommentsCommand },
-  { name: "update", mutation: true, help: UPDATE_HELP, instead: REPLACE_WHOLESALE },
+  { name: "update", mutation: true, help: UPDATE_HELP, handler: sheetsUpdateCommand },
   { name: "append", mutation: true, help: APPEND_HELP, instead: REPLACE_WHOLESALE },
   { name: "clear", mutation: true, help: CLEAR_HELP, instead: REPLACE_WHOLESALE },
   { name: "create", mutation: true, help: CREATE_HELP, instead: CREATE_VIA_UPLOAD },
@@ -124,8 +119,8 @@ writes[${writes.length}]:
 notes:
   Writes require --account <email> when 2+ accounts are authenticated.
   Reads use the default account when --account is not provided.
-  Write subcommands are scaffolded for the next slice — all currently
-  throw NOT_IMPLEMENTED after account resolution runs.
+  'update' is implemented; the other write subcommands are scaffolded for the
+  next slice — they currently throw NOT_IMPLEMENTED after account resolution runs.
 ${renderAlternatives(SUBCOMMANDS)}subcommand help:
   gws-axi sheets read --help       for spreadsheetId + tab/range handling
   gws-axi sheets comments --help   for review comments (Drive comments)

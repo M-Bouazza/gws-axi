@@ -4,6 +4,7 @@ import {
   type calendar_v3,
   type docs_v1,
   type drive_v3,
+  type forms_v1,
   type gmail_v1,
   type sheets_v4,
   type slides_v1,
@@ -59,6 +60,11 @@ export async function slidesClient(email: string): Promise<slides_v1.Slides> {
 export async function sheetsClient(email: string): Promise<sheets_v4.Sheets> {
   const auth = await oauthClientForAccount(email);
   return google.sheets({ version: "v4", auth });
+}
+
+export async function formsClient(email: string): Promise<forms_v1.Forms> {
+  const auth = await oauthClientForAccount(email);
+  return google.forms({ version: "v1", auth });
 }
 
 interface GoogleApiErrorShape {

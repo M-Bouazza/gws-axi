@@ -9,18 +9,19 @@ import { calendarCommand } from "./commands/calendar.js";
 import { gmailCommand } from "./commands/gmail.js";
 import { docsCommand } from "./commands/docs.js";
 import { driveCommand } from "./commands/drive.js";
+import { formsCommand } from "./commands/forms.js";
 import { slidesCommand } from "./commands/slides.js";
 import { sheetsCommand } from "./commands/sheets.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
 
 const DESCRIPTION =
-  "Agent ergonomic CLI for Google Workspace. Unified interface for Gmail, Calendar, Docs, Drive, Slides, and Sheets with agent-guided OAuth setup.";
+  "Agent ergonomic CLI for Google Workspace. Unified interface for Gmail, Calendar, Docs, Drive, Slides, Sheets, and Forms with agent-guided OAuth setup.";
 
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: gws-axi [command] [args] [flags]
-commands[10]:
-  (none)=home, auth, doctor, calendar, gmail, docs, drive, slides, sheets, setup
+commands[11]:
+  (none)=home, auth, doctor, calendar, gmail, docs, drive, slides, sheets, forms, setup
 flags[2]:
   --help, -v/-V/--version
 examples:
@@ -55,6 +56,7 @@ export async function main(): Promise<void> {
       drive: driveCommand,
       slides: slidesCommand,
       sheets: sheetsCommand,
+      forms: formsCommand,
       setup: setupCommand,
     },
     getCommandHelp: (command) => COMMAND_HELP[command],

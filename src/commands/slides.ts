@@ -5,6 +5,7 @@ import { docsCommentsCommand } from "./docs/comments.js";
 import { GET_HELP, slidesGetCommand } from "./slides/get.js";
 import { PAGE_HELP, slidesPageCommand } from "./slides/page.js";
 import { SUMMARIZE_HELP, slidesSummarizeCommand } from "./slides/summarize.js";
+import { slidesUpdateCommand, UPDATE_HELP } from "./slides/update.js";
 
 // Slides comments are Drive comments — the same file-agnostic API `docs
 // comments` / `sheets comments` use. Alias the shared handler with a
@@ -42,12 +43,6 @@ interface SlidesSubcommand {
 const CREATE_HELP = `usage: gws-axi slides create --title <text> [--from <template-id>] [flags]
 status: planned for v1 writes — not yet implemented
 `;
-const UPDATE_HELP = `usage: gws-axi slides update <presentation-id> --requests <json-file> [flags]
-status: planned for v1 writes — not yet implemented
-notes:
-  Will wrap batchUpdate. Until implemented, programmatic edits require
-  the raw Slides API or the Drive copy/edit flow.
-`;
 
 const SUBCOMMANDS: SlidesSubcommand[] = [
   { name: "get", mutation: false, help: GET_HELP, handler: slidesGetCommand },
@@ -64,21 +59,13 @@ const SUBCOMMANDS: SlidesSubcommand[] = [
     handler: slidesSummarizeCommand,
   },
   { name: "comments", mutation: false, help: COMMENTS_HELP, handler: slidesCommentsCommand },
+  { name: "update", mutation: true, help: UPDATE_HELP, handler: slidesUpdateCommand },
   {
     name: "create",
     mutation: true,
     help: CREATE_HELP,
     instead: [
       'gws-axi drive upload <deck.pptx> --convert --name "<title>" --account <email> — creates a new native Presentation and returns its id',
-    ],
-  },
-  {
-    name: "update",
-    mutation: true,
-    help: UPDATE_HELP,
-    instead: [
-      "gws-axi drive upload <deck.pptx> --update <presentationId> --convert --account <email> — replaces the ENTIRE deck as a new revision; NOT a per-slide or per-element edit",
-      "gws-axi slides summarize <presentationId> — read the current deck first; there is no export-to-pptx round trip",
     ],
   },
 ];
@@ -116,18 +103,22 @@ writes[${writes.length}]:
 notes:
   Writes require --account <email> when 2+ accounts are authenticated.
   Reads use the default account when --account is not provided.
-  Write subcommands are scaffolded for the next slice; they throw
-  NOT_IMPLEMENTED after account resolution runs.
+  'update' is implemented (presentations.batchUpdate replaceAllText); 'create'
+  is scaffolded for the next slice — it currently throws NOT_IMPLEMENTED
+  after account resolution runs.
 ${renderAlternatives(SUBCOMMANDS)}subcommand help:
   gws-axi slides get --help        for metadata + slide list
   gws-axi slides page --help       for a single slide's content
   gws-axi slides summarize --help  for the whole deck as markdown
   gws-axi slides comments --help   for review comments (Drive comments)
+  gws-axi slides update --help     for in-place find/replace edits
 examples:
   gws-axi slides get 1AbC...
   gws-axi slides summarize 1AbC...
   gws-axi slides page 1AbC... gd87cbcb3a4_0_42
   gws-axi slides comments 1AbC...
+  gws-axi slides update 1AbC... --find "2025" --replace "2026"
+  gws-axi slides update 1AbC... --find '{{Client}}' --replace "Cospirit" --scope gd87cbcb3a4_0_42
 `;
 
 export async function slidesCommand(args: string[]): Promise<string> {
