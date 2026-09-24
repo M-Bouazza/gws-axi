@@ -54,6 +54,9 @@ interface GmailPart {
 /**
  * Flatten a Gmail message payload into searchable text. Plain-text parts win
  * (joined first); text/html parts are tag-stripped and collected as fallback.
+ * Quoted-reply sections (the "On ... wrote:" / "De : ... a écrit :" blocks and
+ * >-prefixed lines) are STRIPPED so the scanner never picks up the OTHER
+ * party's signature — only the actual sender's content.
  */
 export function messageBodyText(payload: GmailPart): string {
   const plain: string[] = [];
@@ -73,5 +76,32 @@ export function messageBodyText(payload: GmailPart): string {
     for (const child of part.parts ?? []) walk(child);
   };
   walk(payload);
-  return [...plain, ...html].join("\n");
+  return stripQuotedReply([...plain, ...html].join("\n"));
+}
+
+/**
+ * Cut the message at the first quoted-reply boundary. Email threads embed the
+ * previous exchange below the current sender's content — without this strip,
+ * the scanner picks up phone numbers from the REPLYING party's signature
+ * (e.g. the account owner's own number appearing on every thread).
+ */
+export function stripQuotedReply(text: string): string {
+  const markers = [
+    /^-{3,}\s*(?:Message d'origine|Original Message|Forwarded message)\s*-{3,}/im,
+    /^De\s*:/im,
+    /^On .+ wrote\s*:/im,
+    /^Le .+ a écrit\s*:/im,
+    /^El .+ escribió\s*:/im,
+    /^_{5,}\s*$/m,
+    /^Von .+ schrieb\s*:/im,
+  ];
+  let cut = text.length;
+  for (const marker of markers) {
+    const idx = text.search(marker);
+    if (idx !== -1 && idx < cut) cut = idx;
+  }
+  // Also cut at the first >-prefixed line (standard quoting).
+  const gtMatch = text.match(/^>/m);
+  if (gtMatch && gtMatch.index !== undefined && gtMatch.index < cut) cut = gtMatch.index;
+  return text.slice(0, cut);
 }
