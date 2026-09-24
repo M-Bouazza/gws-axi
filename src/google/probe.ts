@@ -239,6 +239,71 @@ function probeForms(ctx: ProbeContext, driveOk: boolean): ProbeResult {
 }
 
 /**
+ * People (Contacts): a real cheap probe exists — people/me with a tiny
+ * personFields mask. Confirms both the contacts scope and People API enablement.
+ */
+async function probePeople(ctx: ProbeContext): Promise<ProbeResult> {
+  const service: ServiceName = "people";
+  if (!hasScope(ctx.tokens, SERVICE_SCOPES.people)) {
+    return { service, status: "fail", detail: "scope not granted" };
+  }
+  const { status, body } = await gfetch(
+    "https://people.googleapis.com/v1/people/me?personFields=names",
+    ctx.accessToken,
+  );
+  if (status === 200) {
+    const me = body as { names?: Array<{ displayName?: string }> };
+    const name = me.names?.[0]?.displayName;
+    return { service, status: "ok", detail: name ? `contacts as ${name}` : "contacts ok" };
+  }
+  return classifyError(service, status, body);
+}
+
+/**
+ * Tasks: cheap real probe — tasklists.list with maxResults=1.
+ */
+async function probeTasks(ctx: ProbeContext): Promise<ProbeResult> {
+  const service: ServiceName = "tasks";
+  if (!hasScope(ctx.tokens, SERVICE_SCOPES.tasks)) {
+    return { service, status: "fail", detail: "scope not granted" };
+  }
+  const { status, body } = await gfetch(
+    "https://tasks.googleapis.com/tasks/v1/users/@me/lists?maxResults=1",
+    ctx.accessToken,
+  );
+  if (status === 200) {
+    const data = body as { items?: unknown[] };
+    return { service, status: "ok", detail: `${data.items?.length ?? 0}+ task list(s)` };
+  }
+  return classifyError(service, status, body);
+}
+
+/**
+ * YouTube: channels.list(mine=true) is a genuine 1-quota-unit probe that
+ * confirms scope + API enablement in one call.
+ */
+async function probeYouTube(ctx: ProbeContext): Promise<ProbeResult> {
+  const service: ServiceName = "youtube";
+  if (!hasScope(ctx.tokens, SERVICE_SCOPES.youtube)) {
+    return { service, status: "fail", detail: "scope not granted" };
+  }
+  const { status, body } = await gfetch(
+    "https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true",
+    ctx.accessToken,
+  );
+  if (status === 200) {
+    const data = body as { items?: Array<{ snippet?: { title?: string } }> };
+    const title = data.items?.[0]?.snippet?.title;
+    return {
+      service,
+      status: "ok",
+      detail: title ? `channel "${title}" reachable` : "no channel under this account",
+    };
+  }
+  return classifyError(service, status, body);
+}
+
+/**
  * Presence checks for each ADDITIONAL_SCOPES entry — scopes layered on top of
  * a service's representative scope that are NOT implied by it. These are a
  * cheap token-string check (no API call). Each result is keyed to its parent
@@ -277,13 +342,24 @@ export async function probeAccount(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // token refresh failed — every service fails for this account
-    return (["gmail", "calendar", "docs", "drive", "slides", "sheets", "forms"] as ServiceName[]).map(
-      (service) => ({
-        service,
-        status: "fail" as const,
-        detail: message,
-      }),
-    );
+    return (
+      [
+        "gmail",
+        "calendar",
+        "docs",
+        "drive",
+        "slides",
+        "sheets",
+        "forms",
+        "people",
+        "tasks",
+        "youtube",
+      ] as ServiceName[]
+    ).map((service) => ({
+      service,
+      status: "fail" as const,
+      detail: message,
+    }));
   }
 
   const ctx: ProbeContext = {
@@ -304,8 +380,25 @@ export async function probeAccount(
   const slides = probeSlides(ctx, driveOk);
   const sheets = probeSheets(ctx, driveOk);
   const forms = probeForms(ctx, driveOk);
+  const [people, tasks, youtube] = await Promise.all([
+    probePeople(ctx).catch((e) => errorResult("people", e)),
+    probeTasks(ctx).catch((e) => errorResult("tasks", e)),
+    probeYouTube(ctx).catch((e) => errorResult("youtube", e)),
+  ]);
 
-  return [gmail, calendar, docs, drive, slides, sheets, forms, ...probeAdditionalScopes(ctx)];
+  return [
+    gmail,
+    calendar,
+    docs,
+    drive,
+    slides,
+    sheets,
+    forms,
+    people,
+    tasks,
+    youtube,
+    ...probeAdditionalScopes(ctx),
+  ];
 }
 
 function errorResult(service: ServiceName, err: unknown): ProbeResult {

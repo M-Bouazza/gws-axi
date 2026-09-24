@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { runAxiCli } from "axi-sdk-js";
 import { homeCommand } from "./commands/home.js";
 import { authCommand, AUTH_HELP } from "./commands/auth.js";
+import { contactsCommand } from "./commands/contacts.js";
 import { doctorCommand, DOCTOR_HELP } from "./commands/doctor.js";
 import { calendarCommand } from "./commands/calendar.js";
 import { gmailCommand } from "./commands/gmail.js";
@@ -14,15 +15,17 @@ import { mergeCommand } from "./commands/merge.js";
 import { slidesCommand } from "./commands/slides.js";
 import { sheetsCommand } from "./commands/sheets.js";
 import { setupCommand, SETUP_HELP } from "./commands/setup.js";
+import { tasksCommand } from "./commands/tasks.js";
+import { youtubeCommand } from "./commands/youtube.js";
 
 const DESCRIPTION =
-  "Agent ergonomic CLI for Google Workspace. Unified interface for Gmail, Calendar, Docs, Drive, Slides, Sheets, and Forms with template merging and agent-guided OAuth setup.";
+  "Agent ergonomic CLI for Google Workspace. Unified interface for Gmail, Calendar, Contacts, Docs, Drive, Slides, Sheets, Forms, Tasks, and YouTube with template merging and agent-guided OAuth setup.";
 
 const VERSION = readPackageVersion();
 
 export const TOP_HELP = `usage: gws-axi [command] [args] [flags]
-commands[12]:
-  (none)=home, auth, doctor, calendar, gmail, docs, drive, slides, sheets, forms, merge, setup
+commands[15]:
+  (none)=home, auth, doctor, calendar, gmail, contacts, docs, drive, slides, sheets, forms, tasks, youtube, merge, setup
 flags[2]:
   --help, -v/-V/--version
 examples:
@@ -30,6 +33,7 @@ examples:
   gws-axi auth setup
   gws-axi doctor
   gws-axi calendar events
+  gws-axi contacts other
   gws-axi merge <templateId> --data '{...}'
   gws-axi setup hooks
 `;
@@ -54,11 +58,14 @@ export async function main(): Promise<void> {
       doctor: doctorCommand,
       calendar: calendarCommand,
       gmail: gmailCommand,
+      contacts: contactsCommand,
       docs: docsCommand,
       drive: driveCommand,
       slides: slidesCommand,
       sheets: sheetsCommand,
       forms: formsCommand,
+      tasks: tasksCommand,
+      youtube: youtubeCommand,
       merge: mergeCommand,
       setup: setupCommand,
     },

@@ -8,6 +8,9 @@ export const SERVICE_SCOPES = {
   slides: "https://www.googleapis.com/auth/presentations",
   sheets: "https://www.googleapis.com/auth/spreadsheets",
   forms: "https://www.googleapis.com/auth/forms",
+  people: "https://www.googleapis.com/auth/contacts",
+  tasks: "https://www.googleapis.com/auth/tasks",
+  youtube: "https://www.googleapis.com/auth/youtube",
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_SCOPES;
@@ -41,6 +44,20 @@ export const ADDITIONAL_SCOPE_INFO: AdditionalScope[] = [
     service: "drive",
     capability: "drive activity timeline",
   },
+  {
+    // Other Contacts (people interacted with via Gmail/Drive but not saved)
+    // live behind their OWN scope — the full `contacts` scope does NOT cover them.
+    scope: "https://www.googleapis.com/auth/contacts.other.readonly",
+    service: "people",
+    capability: "other contacts (people interacted with via Gmail/Drive)",
+  },
+  {
+    // Uploading videos requires youtube.upload specifically — the full
+    // `youtube` scope covers metadata writes but not videos.insert media.
+    scope: "https://www.googleapis.com/auth/youtube.upload",
+    service: "youtube",
+    capability: "video upload (1600 quota units per upload)",
+  },
 ];
 
 export const ADDITIONAL_SCOPES = ADDITIONAL_SCOPE_INFO.map((s) => s.scope);
@@ -53,6 +70,9 @@ export const SERVICES: ServiceName[] = [
   "slides",
   "sheets",
   "forms",
+  "people",
+  "tasks",
+  "youtube",
 ];
 
 export const REQUIRED_APIS: Record<ServiceName, string> = {
@@ -63,6 +83,9 @@ export const REQUIRED_APIS: Record<ServiceName, string> = {
   slides: "slides.googleapis.com",
   sheets: "sheets.googleapis.com",
   forms: "forms.googleapis.com",
+  people: "people.googleapis.com",
+  tasks: "tasks.googleapis.com",
+  youtube: "youtube.googleapis.com",
 };
 
 // APIs required beyond the per-service REQUIRED_APIS map. The Drive Activity

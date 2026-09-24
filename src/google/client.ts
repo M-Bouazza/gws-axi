@@ -6,8 +6,11 @@ import {
   type drive_v3,
   type forms_v1,
   type gmail_v1,
+  type people_v1,
   type sheets_v4,
   type slides_v1,
+  type tasks_v1,
+  type youtube_v3,
 } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { readSetupState } from "../config.js";
@@ -65,6 +68,21 @@ export async function sheetsClient(email: string): Promise<sheets_v4.Sheets> {
 export async function formsClient(email: string): Promise<forms_v1.Forms> {
   const auth = await oauthClientForAccount(email);
   return google.forms({ version: "v1", auth });
+}
+
+export async function peopleClient(email: string): Promise<people_v1.People> {
+  const auth = await oauthClientForAccount(email);
+  return google.people({ version: "v1", auth });
+}
+
+export async function tasksClient(email: string): Promise<tasks_v1.Tasks> {
+  const auth = await oauthClientForAccount(email);
+  return google.tasks({ version: "v1", auth });
+}
+
+export async function youtubeClient(email: string): Promise<youtube_v3.Youtube> {
+  const auth = await oauthClientForAccount(email);
+  return google.youtube({ version: "v3", auth });
 }
 
 interface GoogleApiErrorShape {
