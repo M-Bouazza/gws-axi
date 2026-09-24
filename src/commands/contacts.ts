@@ -84,8 +84,8 @@ examples:
   gws-axi contacts other
   gws-axi contacts search Djuce --include-other
   gws-axi contacts scan-signatures --query "from:david@djuce.com"
-  gws-axi contacts add --from-other otherContacts/c123 --phone "06 12 34 56 78"
-  gws-axi contacts update people/c456 --phone "06 12 34 56 78"
+  gws-axi contacts add --name "David Dworsky" --company Djuce --email david@djuce.com --phone "06 12 34 56 78"
+  gws-axi contacts update people/c456 --phone "06 12 34 56 78" --company Djuce
 `;
 
 export async function contactsCommand(args: string[]): Promise<string> {

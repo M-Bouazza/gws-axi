@@ -146,8 +146,8 @@ export async function contactsScanCommand(account: string, args: string[]): Prom
 
   const suggestions = [
     "PROPOSAL ONLY — nothing was created. Spot-check with the from_message ids, then commit:",
-    "Save new: gws-axi contacts add --name \"<name>\" --email <email> --phone \"<phone>\"",
-    "Enrich existing: gws-axi contacts update <contactId> --phone \"<phone>\"",
+    'Save new: gws-axi contacts add --name "<name>" --company "<company>" --email <email> --phone "<phone>"',
+    "Enrich existing: gws-axi contacts update <contactId> --phone \"<phone>\" --company \"<name>\"",
     "Check a sender: gws-axi contacts search <email> --include-other",
   ];
 

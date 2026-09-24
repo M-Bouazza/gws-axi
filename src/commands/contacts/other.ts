@@ -58,7 +58,9 @@ export function parseFlags(args: string[]): ContactsOtherFlags {
 
 const OTHER_SCHEMA: FieldDef[] = [
   field("id"),
-  field("name"),
+  field("prenom"),
+  field("nom"),
+  field("entreprise"),
   field("email"),
   field("phone"),
 ];
@@ -72,7 +74,7 @@ export async function contactsOtherCommand(account: string, args: string[]): Pro
     const res = await api.otherContacts.list({
       pageSize: flags.limit,
       ...(flags.page !== undefined ? { pageToken: flags.page } : {}),
-      readMask: "names,emailAddresses,phoneNumbers",
+      readMask: "names,emailAddresses,phoneNumbers,organizations",
     });
     others = (res.data.otherContacts ?? []).map((p) => personRow(p));
     nextPageToken = res.data.nextPageToken ?? undefined;
@@ -91,12 +93,7 @@ export async function contactsOtherCommand(account: string, args: string[]): Pro
     renderListResponse({
       name: "others",
       items: others,
-      schema: [
-        field("id"),
-        field("name"),
-        field("email"),
-        field("phone"),
-      ],
+      schema: OTHER_SCHEMA,
       emptyMessage: "no other contacts returned — re-consent via `gws auth login` if contacts.other.readonly is missing",
     }),
     renderHelp(suggestions),

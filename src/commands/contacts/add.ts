@@ -2,19 +2,21 @@ import { AxiError } from "axi-sdk-js";
 import { peopleClient, translateGoogleError } from "../../google/client.js";
 import { joinBlocks, renderHelp, renderObject } from "../../output/index.js";
 
-export const CONTACTS_ADD_HELP = `usage: gws-axi contacts add [--name <text>] [--email <addr>] [--phone <num>] [--from-other <id>] [flags]
-flags[5]:
+export const CONTACTS_ADD_HELP = `usage: gws-axi contacts add [--name <text>] [--company <text>] [--email <addr>] [--phone <num>] [--from-other <id>] [flags]
+flags[6]:
   --name <text>        Full name ("Given Family"); ignored with --from-other
+  --company <text>     Company / organization name
   --email <addr>       Email address
   --phone <num>        Phone number (any format, stored as given)
   --from-other <id>    Promote an Other Contact (from \`contacts other\`) to
-                       a saved contact; --phone/--email enrich it
+                       a saved contact; --phone/--email/--company enrich it
   --account <email>    Account override when 2+ are configured
 examples:
-  gws-axi contacts add --name "David Dworsky" --email david@djuce.com --phone "+33 6 12 34 56 78"
-  gws-axi contacts add --from-other otherContacts/c123456 --phone "06 12 34 56 78"
+  gws-axi contacts add --name "David Dworsky" --company "Djuce" --email david@djuce.com --phone "+33 6 12 34 56 78"
+  gws-axi contacts add --from-other otherContacts/c123456 --phone "06 12 34 56 78" --company "Francescpi"
 output:
-  A \`contact{id,name,email,phone,source}\` block reporting what was created.
+  A \`contact{id,prenom,nom,entreprise,email,phone,source}\` block reporting
+  what was created.
 notes:
   Wraps people.createContact — or copyOtherContactToMyContactsGroup with
   --from-other (the promotion preserves what Google already knows, the
@@ -24,6 +26,7 @@ notes:
 
 export interface ContactsAddFlags {
   name?: string;
+  company?: string;
   email?: string;
   phone?: string;
   fromOther?: string;
@@ -31,6 +34,7 @@ export interface ContactsAddFlags {
 
 export function parseFlags(args: string[]): ContactsAddFlags {
   let name: string | undefined;
+  let company: string | undefined;
   let email: string | undefined;
   let phone: string | undefined;
   let fromOther: string | undefined;
@@ -39,6 +43,9 @@ export function parseFlags(args: string[]): ContactsAddFlags {
     switch (arg) {
       case "--name":
         name = args[++i];
+        break;
+      case "--company":
+        company = args[++i];
         break;
       case "--email":
         email = args[++i];
@@ -55,23 +62,29 @@ export function parseFlags(args: string[]): ContactsAddFlags {
         ]);
     }
   }
-  if (fromOther === undefined && name === undefined && email === undefined && phone === undefined) {
+  if (
+    fromOther === undefined &&
+    name === undefined &&
+    email === undefined &&
+    phone === undefined &&
+    company === undefined
+  ) {
     throw new AxiError(
       "Nothing to add — pass --from-other <id> or at least --name / --email",
       "VALIDATION_ERROR",
       [
-        'Example: contacts add --name "David Dworsky" --email david@djuce.com',
+        'Example: contacts add --name "David Dworsky" --company Djuce --email david@djuce.com',
         "Example: contacts add --from-other otherContacts/c123 --phone '06 12 34 56 78'",
       ],
     );
   }
   if (fromOther !== undefined && name !== undefined) {
     throw new AxiError("--name cannot be combined with --from-other", "VALIDATION_ERROR", [
-      "The promotion keeps the name Google already knows; use --phone/--email to enrich",
+      "The promotion keeps the name Google already knows; use --phone/--email/--company to enrich",
       "Set the name later: contacts update <new-id> --name \"...\"",
     ]);
   }
-  return { name, email, phone, fromOther };
+  return { name, company, email, phone, fromOther };
 }
 
 /** Split a full name into given/family on the last space ("David van Dyk"). */
@@ -93,7 +106,8 @@ export async function contactsAddCommand(account: string, args: string[]): Promi
 
   let created: {
     resourceName?: string | null;
-    names?: Array<{ displayName?: string | null }> | null;
+    names?: Array<{ displayName?: string | null; givenName?: string | null; familyName?: string | null }> | null;
+    organizations?: Array<{ name?: string | null }> | null;
     emailAddresses?: Array<{ value?: string | null }> | null;
     phoneNumbers?: Array<{ value?: string | null }> | null;
     etag?: string | null;
@@ -103,25 +117,32 @@ export async function contactsAddCommand(account: string, args: string[]): Promi
       const res = await api.otherContacts.copyOtherContactToMyContactsGroup({
         resourceName: flags.fromOther,
         requestBody: {
-          // Copy what Google knows; the enriching phone (when passed) is
-          // appended via a follow-up updateContact (the copy request can't
-          // add new fields, only copy existing ones). The etag from the copy
-          // response is required on the update — People API rejects writes
-          // without it ("Request must set person.etag...").
-          copyMask: "names,emailAddresses,phoneNumbers",
+          // Copy what Google knows; enriching fields (phone/company) are
+          // appended via follow-up updateContact calls — the copy request
+          // can only copy fields the Other Contact already has. The etag
+          // from the copy response is required on those updates.
+          copyMask: "names,emailAddresses,phoneNumbers,organizations",
         },
       });
       created = res.data;
-      if (flags.phone !== undefined && created.resourceName) {
-        const phoneRes = await api.people.updateContact({
+      const updateMasks: string[] = [];
+      const updateBody: Record<string, unknown> = { etag: created.etag ?? "" };
+      if (flags.phone !== undefined) {
+        updateBody.phoneNumbers = [{ value: flags.phone }];
+        updateMasks.push("phoneNumbers");
+      }
+      if (flags.company !== undefined) {
+        updateBody.organizations = [{ name: flags.company }];
+        updateMasks.push("organizations");
+      }
+      if (updateMasks.length > 0 && created.resourceName) {
+        const enrichRes = await api.people.updateContact({
           resourceName: created.resourceName,
-          updatePersonFields: "phoneNumbers",
-          requestBody: {
-            etag: created.etag ?? "",
-            phoneNumbers: [{ value: flags.phone }],
-          },
+          updatePersonFields: updateMasks.join(","),
+          requestBody: updateBody,
         });
-        created.phoneNumbers = phoneRes.data.phoneNumbers ?? null;
+        created.phoneNumbers = enrichRes.data.phoneNumbers ?? null;
+        created.organizations = enrichRes.data.organizations ?? null;
       }
     } else {
       const body: Record<string, unknown> = {};
@@ -129,6 +150,7 @@ export async function contactsAddCommand(account: string, args: string[]): Promi
         const { givenName, familyName } = splitName(flags.name);
         body.names = [{ givenName, familyName }];
       }
+      if (flags.company !== undefined) body.organizations = [{ name: flags.company }];
       if (flags.email !== undefined) body.emailAddresses = [{ value: flags.email }];
       if (flags.phone !== undefined) body.phoneNumbers = [{ value: flags.phone }];
       const res = await api.people.createContact({ requestBody: body });
@@ -154,7 +176,9 @@ export async function contactsAddCommand(account: string, args: string[]): Promi
       account,
       contact: {
         id: created.resourceName ?? "",
-        name: created.names?.[0]?.displayName ?? flags.name ?? "",
+        prenom: created.names?.[0]?.givenName ?? splitName(flags.name ?? "").givenName,
+        nom: created.names?.[0]?.familyName ?? splitName(flags.name ?? "").familyName,
+        entreprise: created.organizations?.[0]?.name ?? flags.company ?? "",
         email: created.emailAddresses?.[0]?.value ?? flags.email ?? "",
         phone: created.phoneNumbers?.[0]?.value ?? flags.phone ?? "",
         source: flags.fromOther !== undefined ? "promoted-from-other" : "created",
@@ -162,7 +186,7 @@ export async function contactsAddCommand(account: string, args: string[]): Promi
     }),
     renderHelp([
       "Verify with: gws-axi contacts list",
-      "Add missing details later: gws-axi contacts update " + (created.resourceName ?? "<id>") + " --phone <num>",
+      "Add missing details later: gws-axi contacts update " + (created.resourceName ?? "<id>") + " --phone <num> --company <name>",
     ]),
   ];
   return joinBlocks(...blocks);

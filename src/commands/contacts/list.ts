@@ -58,7 +58,9 @@ export function parseFlags(args: string[]): ContactsListFlags {
 
 export const CONTACTS_SCHEMA: FieldDef[] = [
   field("id"),
-  field("name"),
+  field("prenom"),
+  field("nom"),
+  field("entreprise"),
   field("email"),
   field("phone"),
 ];

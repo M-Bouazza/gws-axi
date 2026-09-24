@@ -121,17 +121,35 @@ describe("splitName", () => {
 });
 
 describe("contacts add — parseFlags", () => {
-  it("parses name/email/phone", () => {
+  it("parses name/company/email/phone", () => {
     expect(
-      parseAddFlags(["--name", "David Dworsky", "--email", "d@d.com", "--phone", "+33 6 12 34 56 78"]),
-    ).toEqual({ name: "David Dworsky", email: "d@d.com", phone: "+33 6 12 34 56 78", fromOther: undefined });
+      parseAddFlags([
+        "--name",
+        "David Dworsky",
+        "--company",
+        "Djuce",
+        "--email",
+        "d@d.com",
+        "--phone",
+        "+33 6 12 34 56 78",
+      ]),
+    ).toEqual({
+      name: "David Dworsky",
+      company: "Djuce",
+      email: "d@d.com",
+      phone: "+33 6 12 34 56 78",
+      fromOther: undefined,
+    });
   });
 
-  it("parses --from-other with --phone enrichment", () => {
-    expect(parseAddFlags(["--from-other", "otherContacts/c123", "--phone", "06 12 34 56 78"])).toEqual({
+  it("parses --from-other with --phone and --company enrichment", () => {
+    expect(
+      parseAddFlags(["--from-other", "otherContacts/c123", "--phone", "06 12 34 56 78", "--company", "Francescpi"]),
+    ).toEqual({
       name: undefined,
       email: undefined,
       phone: "06 12 34 56 78",
+      company: "Francescpi",
       fromOther: "otherContacts/c123",
     });
   });

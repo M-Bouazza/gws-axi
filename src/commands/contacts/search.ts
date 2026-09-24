@@ -77,7 +77,7 @@ export async function contactsSearchCommand(account: string, args: string[]): Pr
     const res = await api.people.searchContacts({
       query: flags.query,
       pageSize: flags.limit,
-      readMask: "names,emailAddresses,phoneNumbers",
+      readMask: "names,emailAddresses,phoneNumbers,organizations",
     });
     for (const result of res.data.results ?? []) {
       const person = result.person;
@@ -93,7 +93,7 @@ export async function contactsSearchCommand(account: string, args: string[]): Pr
       const res = await api.otherContacts.search({
         query: flags.query,
         pageSize: flags.limit,
-        readMask: "names,emailAddresses,phoneNumbers",
+        readMask: "names,emailAddresses,phoneNumbers,organizations",
       });
       for (const result of res.data.results ?? []) {
         const person = result.person;
@@ -120,7 +120,9 @@ export async function contactsSearchCommand(account: string, args: string[]): Pr
       items: rows,
       schema: [
         field("id"),
-        field("name"),
+        field("prenom"),
+        field("nom"),
+        field("entreprise"),
         field("email"),
         field("phone"),
         field("source"),

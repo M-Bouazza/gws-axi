@@ -2,19 +2,21 @@ import { AxiError } from "axi-sdk-js";
 import { peopleClient, translateGoogleError } from "../../google/client.js";
 import { joinBlocks, renderHelp, renderObject } from "../../output/index.js";
 
-export const CONTACTS_UPDATE_HELP = `usage: gws-axi contacts update <contactId> [--name <text>] [--email <addr>] [--phone <num>] [flags]
+export const CONTACTS_UPDATE_HELP = `usage: gws-axi contacts update <contactId> [--name <text>] [--company <text>] [--email <addr>] [--phone <num>] [flags]
 args[1]:
   <contactId>          Saved contact id (people/c...) from \`contacts list\`
-flags[4]:
+flags[5]:
   --name <text>        New full name (replaces the primary name)
+  --company <text>     Company / organization (replaces the primary org)
   --email <addr>       Email: replaces the first entry when one exists, else adds
   --phone <num>        Phone: replaces the first entry when one exists, else adds
   --account <email>    Account override when 2+ are configured
 examples:
-  gws-axi contacts update people/c123456 --phone "06 12 34 56 78"
+  gws-axi contacts update people/c123456 --phone "06 12 34 56 78" --company "Djuce"
   gws-axi contacts update people/c123456 --name "David Dworsky" --email david@djuce.com
 output:
-  A \`contact{id,name,email,phone,updated_masks}\` block reporting what changed.
+  A \`contact{id,prenom,nom,entreprise,email,phone,updated_masks}\` block
+  reporting what changed.
 notes:
   Wraps people.updateContact. The contact is fetched first and the provided
   fields are merged INTO what exists (first entry replaced, others kept) —
@@ -25,6 +27,7 @@ notes:
 export interface ContactsUpdateFlags {
   contactId: string;
   name?: string;
+  company?: string;
   email?: string;
   phone?: string;
 }
@@ -32,6 +35,7 @@ export interface ContactsUpdateFlags {
 export function parseFlags(args: string[]): ContactsUpdateFlags {
   let contactId: string | undefined;
   let name: string | undefined;
+  let company: string | undefined;
   let email: string | undefined;
   let phone: string | undefined;
   for (let i = 0; i < args.length; i++) {
@@ -43,6 +47,9 @@ export function parseFlags(args: string[]): ContactsUpdateFlags {
     switch (arg) {
       case "--name":
         name = args[++i];
+        break;
+      case "--company":
+        company = args[++i];
         break;
       case "--email":
         email = args[++i];
@@ -61,14 +68,14 @@ export function parseFlags(args: string[]): ContactsUpdateFlags {
       "Usage: gws-axi contacts update <contactId> --phone <num>",
     ]);
   }
-  if (name === undefined && email === undefined && phone === undefined) {
+  if (name === undefined && email === undefined && phone === undefined && company === undefined) {
     throw new AxiError(
-      "Nothing to update — pass at least one of --name, --email, --phone",
+      "Nothing to update — pass at least one of --name, --company, --email, --phone",
       "VALIDATION_ERROR",
-      ['Example: contacts update people/c123 --phone "06 12 34 56 78"'],
+      ['Example: contacts update people/c123 --phone "06 12 34 56 78" --company Djuce'],
     );
   }
-  return { contactId, name, email, phone };
+  return { contactId, name, company, email, phone };
 }
 
 /** Replace the first entry's value in an array-of-{value}, or append. */
@@ -85,6 +92,20 @@ export function mergeValueArray(
   return merged;
 }
 
+/** Replace the first org's name, or append a new org entry. */
+export function mergeOrganizations(
+  existing: Array<{ name?: string | null }> | null | undefined,
+  newName: string,
+): Array<{ name: string }> {
+  const merged = (existing ?? []).map((entry) => ({ name: entry.name ?? "" }));
+  if (merged.length > 0 && merged[0].name !== "") {
+    merged[0] = { name: newName };
+  } else {
+    merged.unshift({ name: newName });
+  }
+  return merged;
+}
+
 export async function contactsUpdateCommand(account: string, args: string[]): Promise<string> {
   const flags = parseFlags(args);
   const api = await peopleClient(account);
@@ -92,13 +113,14 @@ export async function contactsUpdateCommand(account: string, args: string[]): Pr
   let existing: {
     etag?: string | null;
     names?: Array<{ givenName?: string | null; familyName?: string | null; displayName?: string | null }> | null;
+    organizations?: Array<{ name?: string | null }> | null;
     emailAddresses?: Array<{ value?: string | null }> | null;
     phoneNumbers?: Array<{ value?: string | null }> | null;
   };
   try {
     const res = await api.people.get({
       resourceName: flags.contactId,
-      personFields: "names,emailAddresses,phoneNumbers",
+      personFields: "names,emailAddresses,phoneNumbers,organizations",
     });
     existing = res.data;
   } catch (err) {
@@ -127,6 +149,10 @@ export async function contactsUpdateCommand(account: string, args: string[]): Pr
     requestBody.names = [{ givenName: given, familyName: rest.join(" ") }];
     masks.push("names");
   }
+  if (flags.company !== undefined) {
+    requestBody.organizations = mergeOrganizations(existing.organizations, flags.company);
+    masks.push("organizations");
+  }
   if (flags.email !== undefined) {
     requestBody.emailAddresses = mergeValueArray(existing.emailAddresses, flags.email);
     masks.push("emailAddresses");
@@ -137,7 +163,8 @@ export async function contactsUpdateCommand(account: string, args: string[]): Pr
   }
 
   let updated: {
-    names?: Array<{ displayName?: string | null }> | null;
+    names?: Array<{ displayName?: string | null; givenName?: string | null; familyName?: string | null }> | null;
+    organizations?: Array<{ name?: string | null }> | null;
     emailAddresses?: Array<{ value?: string | null }> | null;
     phoneNumbers?: Array<{ value?: string | null }> | null;
   };
@@ -157,14 +184,16 @@ export async function contactsUpdateCommand(account: string, args: string[]): Pr
       account,
       contact: {
         id: flags.contactId,
-        name: updated.names?.[0]?.displayName ?? "",
+        prenom: updated.names?.[0]?.givenName ?? "",
+        nom: updated.names?.[0]?.familyName ?? "",
+        entreprise: updated.organizations?.[0]?.name ?? "",
         email: (updated.emailAddresses ?? []).map((e) => e.value ?? "").join(", "),
         phone: (updated.phoneNumbers ?? []).map((p) => p.value ?? "").join(", "),
         updated_masks: masks.join(","),
       },
     }),
     renderHelp([
-      "Verify with: gws-axi contacts search " + (updated.names?.[0]?.displayName ?? flags.contactId),
+      "Verify with: gws-axi contacts list",
       "Merge semantics: the first matching entry is replaced, other entries are kept",
     ]),
   ];
