@@ -39,10 +39,9 @@ const EMAIL_ENUM: Record<string, forms_v1.Schema$FormSettings["emailCollectionTy
   off: "DO_NOT_COLLECT",
   none: "DO_NOT_COLLECT",
   optional: "RESPONDER_INPUT",
-  verified: "VERIFIED_COLLECTION",
+  verified: "VERIFIED",
   do_not_collect: "DO_NOT_COLLECT",
   responder_input: "RESPONDER_INPUT",
-  verified_collection: "VERIFIED_COLLECTION",
 };
 
 export function parseQuiz(raw: string): boolean {
@@ -119,7 +118,7 @@ function requireCollectEmail(
     throw new AxiError(
       `--collect-email must be one of off, optional, verified (got '${raw}')`,
       "VALIDATION_ERROR",
-      ["off = DO_NOT_COLLECT, optional = RESPONDER_INPUT, verified = VERIFIED_COLLECTION"],
+      ["off = DO_NOT_COLLECT, optional = RESPONDER_INPUT, verified = VERIFIED"],
     );
   }
   return mapped;

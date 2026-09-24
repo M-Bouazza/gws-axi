@@ -24,7 +24,7 @@ describe("parseFlags", () => {
       title: "Diagnostic",
       description: "",
       quiz: true,
-      collectEmail: "VERIFIED_COLLECTION",
+      collectEmail: "VERIFIED",
     });
   });
 
@@ -33,9 +33,7 @@ describe("parseFlags", () => {
     expect(parseFlags(["1AbC", "--collect-email", "optional"]).collectEmail).toBe(
       "RESPONDER_INPUT",
     );
-    expect(parseFlags(["1AbC", "--collect-email", "verified"]).collectEmail).toBe(
-      "VERIFIED_COLLECTION",
-    );
+    expect(parseFlags(["1AbC", "--collect-email", "verified"]).collectEmail).toBe("VERIFIED");
     // underscores and dashes are equivalent
     expect(parseFlags(["1AbC", "--collect-email", "do-not-collect"]).collectEmail).toBe(
       "DO_NOT_COLLECT",
