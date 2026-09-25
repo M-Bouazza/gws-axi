@@ -303,17 +303,28 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     );
   }
 
-  // 4. --apply: commit phones to saved contacts with exactly 1 proposal
+  // 4. --apply: commit phones to saved contacts with exactly 1 proposal.
+  // A FRESH people.get per target supplies the CURRENT etag — the inventory
+  // etag may be stale if a prior enrich pass (or another writer) modified
+  // the contact between the load and the update.
   let applied = 0;
   if (flags.apply) {
     for (const proposal of proposals) {
       if (proposal.source !== "contact" || proposal.phones.length !== 1) continue;
       try {
+        const fresh = await api.people.get({
+          resourceName: proposal.id,
+          personFields: "names,emailAddresses,phoneNumbers",
+        });
+        if ((fresh.data.phoneNumbers ?? []).some((p) => (p.value ?? "") !== "")) {
+          // The contact already has a phone — skip (never overwrite).
+          continue;
+        }
         const res = await api.people.updateContact({
           resourceName: proposal.id,
           updatePersonFields: "phoneNumbers",
           requestBody: {
-            etag: proposal.etag,
+            etag: fresh.data.etag ?? "",
             phoneNumbers: [{ value: proposal.phones[0] }],
           },
         });

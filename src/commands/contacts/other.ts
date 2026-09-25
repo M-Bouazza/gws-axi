@@ -74,7 +74,8 @@ export async function contactsOtherCommand(account: string, args: string[]): Pro
     const res = await api.otherContacts.list({
       pageSize: flags.limit,
       ...(flags.page !== undefined ? { pageToken: flags.page } : {}),
-      readMask: "names,emailAddresses,phoneNumbers,organizations",
+      // organizations is NOT allowed on otherContacts read requests (400).
+      readMask: "names,emailAddresses,phoneNumbers",
     });
     others = (res.data.otherContacts ?? []).map((p) => personRow(p));
     nextPageToken = res.data.nextPageToken ?? undefined;
