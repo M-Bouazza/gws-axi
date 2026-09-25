@@ -147,6 +147,7 @@ async function loadAllOtherContacts(
 interface ScanResult {
   phones: string[];
   scanned_messages: number;
+  from_name: string;
 }
 
 async function scanSenderPhones(
@@ -155,6 +156,7 @@ async function scanSenderPhones(
 ): Promise<ScanResult> {
   const phones = new Set<string>();
   let scanned = 0;
+  let fromName = "";
   try {
     const listRes = await api.users.messages.list({
       userId: "me",
@@ -168,6 +170,21 @@ async function scanSenderPhones(
       try {
         const msgRes = await api.users.messages.get({ userId: "me", id, format: "full" });
         scanned++;
+        // Extract From header display name (e.g. "David Dworsky" <david@djuce.com>)
+        if (!fromName) {
+          const fromHeader = (msgRes.data.payload?.headers ?? []).find(
+            (h) => h.name?.toLowerCase() === "from",
+          );
+          if (fromHeader?.value) {
+            const match = fromHeader.value.match(/^"?([^"<]+)"?\s*<[^>]+>$/);
+            if (match?.[1]) fromName = match[1].trim();
+            else {
+              // Bare email without display name — try local part
+              const bare = fromHeader.value.trim();
+              if (!bare.includes("<")) fromName = "";
+            }
+          }
+        }
         const text = messageBodyText(msgRes.data.payload ?? {});
         for (const f of extractPhones(text)) {
           phones.add(f.normalized);
@@ -179,7 +196,7 @@ async function scanSenderPhones(
   } catch {
     // Per-sender list failure — skip this sender
   }
-  return { phones: [...phones], scanned_messages: scanned };
+  return { phones: [...phones], scanned_messages: scanned, from_name: fromName };
 }
 
 export async function contactsEnrichCommand(account: string, args: string[]): Promise<string> {
@@ -197,16 +214,17 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     throw translateGoogleError(err, { account, operation: "people.connections.list" });
   }
 
-  // 2. Filter to contacts missing phone AND having at least one email
-  const missingPhone: EnrichTarget[] = [];
+  // 2. Filter to contacts missing phone OR missing prenom/nom, AND having at least one email
+  const missingData: EnrichTarget[] = [];
   const seenIds = new Set<string>();
   for (const p of connections) {
     const row = personRow(p);
-    if (String(row.phone) !== "" || seenIds.has(String(row.id))) continue;
-    seenIds.add(String(row.id));
     const email = String(row.email).split(", ")[0] ?? "";
-    if (email === "") continue;
-    missingPhone.push({
+    const noPhone = String(row.phone) === "";
+    const noName = String(row.prenom) === "" && String(row.nom) === "";
+    if ((!noPhone && !noName) || email === "" || seenIds.has(String(row.id))) continue;
+    seenIds.add(String(row.id));
+    missingData.push({
       id: String(row.id),
       source: "contact",
       prenom: String(row.prenom),
@@ -218,11 +236,12 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
   }
   for (const p of others) {
     const row = personRow(p);
-    if (String(row.phone) !== "" || seenIds.has(String(row.id))) continue;
-    seenIds.add(String(row.id));
     const email = String(row.email).split(", ")[0] ?? "";
-    if (email === "") continue;
-    missingPhone.push({
+    const noPhone = String(row.phone) === "";
+    const noName = String(row.prenom) === "" && String(row.nom) === "";
+    if ((!noPhone && !noName) || email === "" || seenIds.has(String(row.id))) continue;
+    seenIds.add(String(row.id));
+    missingData.push({
       id: String(row.id),
       source: "other",
       prenom: String(row.prenom),
@@ -233,7 +252,7 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     });
   }
 
-  if (missingPhone.length === 0) {
+  if (missingData.length === 0) {
     return joinBlocks(
       renderObject({ account, missing_phone: 0 }),
       renderListResponse({
@@ -247,14 +266,16 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
   }
 
   // 3. Scan Gmail per sender (up to --limit targets)
-  const targets = missingPhone.slice(0, flags.limit);
-  const remaining = missingPhone.length - targets.length;
+  const targets = missingData.slice(0, flags.limit);
+  const remaining = missingData.length - targets.length;
 
   interface Proposal {
     id: string;
     source: "contact" | "other";
     prenom: string;
     nom: string;
+    prenom_proposed: string;
+    nom_proposed: string;
     entreprise_suggestion: string;
     email: string;
     phones: string[];
@@ -267,12 +288,26 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
   for (const target of targets) {
     const scan = await scanSenderPhones(gapi, target.email);
     totalScanned += scan.scanned_messages;
-    if (scan.phones.length === 0) continue;
+    if (scan.phones.length === 0 && !scan.from_name) continue;
+    // Propose prenom/nom from the From header display name
+    let prenomProposed = "";
+    let nomProposed = "";
+    if (scan.from_name) {
+      const lastSpace = scan.from_name.lastIndexOf(" ");
+      if (lastSpace !== -1) {
+        prenomProposed = scan.from_name.slice(0, lastSpace);
+        nomProposed = scan.from_name.slice(lastSpace + 1);
+      } else {
+        prenomProposed = scan.from_name;
+      }
+    }
     proposals.push({
       id: target.id,
       source: target.source,
       prenom: target.prenom,
       nom: target.nom,
+      prenom_proposed: target.prenom === "" ? prenomProposed : "",
+      nom_proposed: target.nom === "" ? nomProposed : "",
       entreprise_suggestion: target.entreprise !== "" ? target.entreprise : deduceCompanyFromDomain(target.email),
       email: target.email,
       phones: scan.phones,
@@ -285,7 +320,7 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     return joinBlocks(
       renderObject({
         account,
-        missing_phone: missingPhone.length,
+        missing_phone: missingData.length,
         scanned_senders: targets.length,
         scanned_messages: totalScanned,
         proposals: 0,
@@ -297,36 +332,48 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
         emptyMessage: `no FR phone numbers found in the ${targets.length} scanned sender(s) — try a higher --limit or a broader --query`,
       }),
       renderHelp([
-        `Targets scanned: ${targets.length} of ${missingPhone.length} contacts missing phone${remaining > 0 ? ` (${remaining} remaining — increase --limit)` : ""}`,
+        `Targets scanned: ${targets.length} of ${missingData.length} contacts missing phone${remaining > 0 ? ` (${remaining} remaining — increase --limit)` : ""}`,
         "Re-run with a higher --limit to scan more senders",
       ]),
     );
   }
 
-  // 4. --apply: commit phones to saved contacts with exactly 1 proposal.
+  // 4. --apply: commit phones AND prenom/nom to saved contacts.
   // A FRESH people.get per target supplies the CURRENT etag — the inventory
   // etag may be stale if a prior enrich pass (or another writer) modified
   // the contact between the load and the update.
   let applied = 0;
   if (flags.apply) {
     for (const proposal of proposals) {
-      if (proposal.source !== "contact" || proposal.phones.length !== 1) continue;
+      if (proposal.source !== "contact") continue;
+      const hasPhone = proposal.phones.length === 1;
+      const hasName = proposal.prenom_proposed !== "" || proposal.nom_proposed !== "";
+      if (!hasPhone && !hasName) continue;
       try {
         const fresh = await api.people.get({
           resourceName: proposal.id,
           personFields: "names,emailAddresses,phoneNumbers",
         });
-        if ((fresh.data.phoneNumbers ?? []).some((p) => (p.value ?? "") !== "")) {
-          // The contact already has a phone — skip (never overwrite).
-          continue;
+        const requestBody: Record<string, unknown> = { etag: fresh.data.etag ?? "" };
+        const masks: string[] = [];
+        if (hasPhone && !(fresh.data.phoneNumbers ?? []).some((p) => (p.value ?? "") !== "")) {
+          requestBody.phoneNumbers = [{ value: proposal.phones[0] }];
+          masks.push("phoneNumbers");
         }
+        if (hasName) {
+          const existingName = (fresh.data.names ?? [])[0] ?? {};
+          const givenName = proposal.prenom_proposed || existingName.givenName || "";
+          const familyName = proposal.nom_proposed || existingName.familyName || "";
+          if (givenName || familyName) {
+            requestBody.names = [{ givenName, familyName }];
+            masks.push("names");
+          }
+        }
+        if (masks.length === 0) continue;
         const res = await api.people.updateContact({
           resourceName: proposal.id,
-          updatePersonFields: "phoneNumbers",
-          requestBody: {
-            etag: fresh.data.etag ?? "",
-            phoneNumbers: [{ value: proposal.phones[0] }],
-          },
+          updatePersonFields: masks.join(","),
+          requestBody,
         });
         if (res.status === 200) {
           proposal.applied = true;
@@ -343,6 +390,8 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     id: p.id,
     prenom: p.prenom,
     nom: p.nom,
+    prenom_proposed: p.prenom_proposed,
+    nom_proposed: p.nom_proposed,
     entreprise_suggestion: p.entreprise_suggestion,
     email: p.email,
     phones: p.phones.join(" | "),
@@ -350,7 +399,7 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     applied: p.applied ? "✓" : "",
   }));
 
-  // 6. Manual company commands (the user validated: phone auto-commits, company stays manual)
+  // 6. Manual company commands (the user validated: phone + names auto-commits, company stays manual)
   const companyCommands = proposals
     .filter((p) => p.entreprise_suggestion !== "")
     .map((p) => {
@@ -371,7 +420,7 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
 
   const suggestions: string[] = [];
   if (flags.apply) {
-    suggestions.push(`Phones committed for ${applied} saved contact(s) (empty fields only, single-phone proposals)`);
+    suggestions.push(`Phones + prenom/nom committed for ${applied} saved contact(s) (empty fields only)`);
     suggestions.push(`${proposals.filter((p) => !p.applied).length} proposal(s) NOT applied — review the table above`);
   } else {
     suggestions.push(`PROPOSALS ONLY — nothing committed. Re-run with --apply to commit the single-phone saved contacts`);
@@ -384,14 +433,14 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
     }
   }
   if (remaining > 0) {
-    suggestions.push(`${remaining} contacts missing phone not scanned — increase --limit (max 200)`);
+    suggestions.push(`${remaining} contacts missing data not scanned — increase --limit (max 200)`);
   }
 
   return joinBlocks(
     renderObject({
       account,
       enrich: {
-        missing_phone: missingPhone.length,
+        missing_data: missingData.length,
         scanned_senders: targets.length,
         scanned_messages: totalScanned,
         proposals: proposals.length,
@@ -407,13 +456,15 @@ export async function contactsEnrichCommand(account: string, args: string[]): Pr
         field("id"),
         field("prenom"),
         field("nom"),
+        field("prenom_proposed"),
+        field("nom_proposed"),
         field("entreprise_suggestion"),
         field("email"),
         field("phones"),
         field("source"),
         field("applied"),
       ],
-      emptyMessage: "no phone numbers found — try a higher --limit",
+      emptyMessage: "no proposals found — try a higher --limit",
     }),
     renderHelp(suggestions),
   );
